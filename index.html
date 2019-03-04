@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Monacoin lua plugin</title>
+  <script src="./blockly_compressed.js"></script>
+  <script src="./blocks_compressed.js"></script>
+  <script src="./lua_compressed.js"></script>
+  <script src="./custom_block.js"></script>
+  <script src="./msg/js/ja.js"></script>
+  <style>
+    body {
+      background-color: #fff;
+      font-family: sans-serif;
+    }
+    h1 {
+      font-weight: normal;
+      font-size: 140%;
+    }
+    .label.base {
+      box-sizing: border-box;
+      white-space: nowrap;
+      border-radius: 0.2em;
+      padding: 0.4em 1.2em 0.4em;
+      margin: 0 0.3em;
+      text-align: center;
+      color: #ffffff;
+      font-size: 0.75em;
+      font-weight: 700;
+      line-height: 1;
+      display: inline;
+      white-space: nowrap;
+      vertical-align: baseline;
+      position: relative;
+      top: -0.15em;
+      background-color: #999999; }
+    .label.color-blue { background-color: #6f9ad1; }
+    .label.color-red { background-color: #d37c7c; }
+  </style>
+</head>
+<body>
+  <label class="label base color-red" onclick="fileDownload()">保存</label>
+  <label class="label base color-blue">読み込み<input type="file" id="files" name="files[]" style="display:none;" multiple /></label>
+  <table>
+    <tr>
+      <td>
+        <div id="primaryDiv" style="height: 600px; width: 800px;"></div>
+      </td>
+      <td>
+        <div style="height: 600px;"><pre id="textLuacode"></pre></div>
+      </td>
+    </tr>
+  </table>
+
+  <xml id="toolbox" style="display: none">
+    <category name="条件式" colour="%{BKY_LOGIC_HUE}">
+      <block type="controls_if"></block>
+      <block type="controls_if">
+        <mutation else="1"></mutation>
+      </block>
+      <block type="logic_compare"></block>
+      <block type="logic_operation"></block>
+      <block type="logic_negate"></block>
+      <block type="logic_boolean"></block>
+      <block type="logic_null"></block>
+      <block type="logic_ternary"></block>
+    </category>
+
+    <category name="繰り返し" colour="%{BKY_LOOPS_HUE}">
+      <block type="controls_repeat_ext">
+        <value name="TIMES">
+          <block type="math_number">
+            <field name="NUM">10</field>
+          </block>
+        </value>
+      </block>
+      <block type="controls_whileUntil"></block>
+      <block type="controls_for">
+        <field name="VAR">i</field>
+        <value name="FROM">
+          <block type="math_number">
+            <field name="NUM">1</field>
+          </block>
+        </value>
+        <value name="TO">
+          <block type="math_number">
+            <field name="NUM">10</field>
+          </block>
+        </value>
+        <value name="BY">
+          <block type="math_number">
+            <field name="NUM">1</field>
+          </block>
+        </value>
+      </block>
+      <block type="controls_forEach"></block>
+      <block type="controls_flow_statements"></block>
+    </category>
+    <category name="計算" colour="%{BKY_MATH_HUE}">
+      <block type="math_number">
+        <field name="NUM">123</field>
+      </block>
+      <block type="math_arithmetic"></block>
+      <block type="math_single"></block>
+      <block type="math_trig"></block>
+      <block type="math_constant"></block>
+      <block type="math_number_property"></block>
+      <block type="math_round"></block>
+      <block type="math_on_list"></block>
+      <block type="math_modulo"></block>
+      <block type="math_constrain">
+        <value name="LOW">
+          <block type="math_number">
+            <field name="NUM">1</field>
+          </block>
+        </value>
+        <value name="HIGH">
+          <block type="math_number">
+            <field name="NUM">100</field>
+          </block>
+        </value>
+      </block>
+      <block type="math_random_int">
+        <value name="FROM">
+          <block type="math_number">
+            <field name="NUM">1</field>
+          </block>
+        </value>
+        <value name="TO">
+          <block type="math_number">
+            <field name="NUM">100</field>
+          </block>
+        </value>
+      </block>
+      <block type="math_random_float"></block>
+      <block type="math_atan2"></block>
+    </category>
+    <category name="リスト" colour="%{BKY_LISTS_HUE}">
+      <block type="lists_create_empty"></block>
+      <block type="lists_create_with"></block>
+      <block type="lists_repeat">
+        <value name="NUM">
+          <block type="math_number">
+            <field name="NUM">5</field>
+          </block>
+        </value>
+      </block>
+      <block type="lists_length"></block>
+      <block type="lists_isEmpty"></block>
+      <block type="lists_indexOf"></block>
+      <block type="lists_getIndex"></block>
+      <block type="lists_setIndex"></block>
+      <block type="lists_getindex2"></block>
+    </category>
+    <category name="文字列" colour="%{BKY_TEXTS_HUE}">
+      <block type="text"></block>
+      <block type="text_length"></block>
+      <block type="text_print"></block>
+    </category>
+    <category name="変数" custom="VARIABLE" colour="%{BKY_VARIABLES_HUE}">
+    </category>
+    <category name="関数" custom="PROCEDURE" colour="%{BKY_PROCEDURES_HUE}">
+    </category>
+    <sep></sep>
+    <category name="コールバック" colour=345>
+      <block type="_cboninit"></block>
+      <block type="_cbonterm"></block>
+      <block type="_cbonblocknotify"></block>
+      <block type="_cbonwalletnotify"></block>
+    </category>
+    <category name="呼び出し結果" colour=345>
+      <block type="check_result"></block>
+      <block type="check_value"></block>
+    </category>
+    <sep></sep>
+    <category name="ウォレット"  colour=60>
+      <block type="_getbalance"></block>
+      <block type="_sendtoaddress"></block>
+      <block type="_gettransaction"></block>
+    </category>
+    <category name="ブロックチェーン" colour=60>
+      <block type="_getblock"></block>
+    </category>
+    <sep></sep>
+    <category name="サンプル" expanded="false">
+      <category name="残高と送金">
+          <variables>
+            <variable type="" id=",*SS?L%(^7CUnw@lg=92">ret</variable>
+          </variables>
+          <block type="_cboninit" id="6c9.VKB:*,H},4hHaG%G" x="-512" y="112">
+            <statement name="cbcode">
+              <block type="text_print" id="6qG,hCRS%$c[V~f[|32_">
+                <value name="TEXT">
+                  <block type="text" id="l5Zf}Ars[^62Q2L}}:zB">
+                    <field name="TEXT">*** OnInit ***</field>
+                  </block>
+                </value>
+                <next>
+                  <block type="variables_set" id="p$Zffc$8dR_CT4=^!6wz">
+                    <field name="VAR" id=",*SS?L%(^7CUnw@lg=92" variabletype="">ret</field>
+                    <value name="VALUE">
+                      <block type="_getbalance" id="D$w5`K_RdRMT52-ez;%K">
+                        <mutation items="0"></mutation>
+                      </block>
+                    </value>
+                    <next>
+                      <block type="controls_if" id="!vx47~a-54m_.CZ9Wb)_">
+                        <value name="IF0">
+                          <block type="check_result" id="DR#4rKOF^Y2;6VRv(DvB">
+                            <value name="result">
+                              <block type="variables_get" id="yRC*Tbs;4KhK-jzyh,7K">
+                                <field name="VAR" id=",*SS?L%(^7CUnw@lg=92" variabletype="">ret</field>
+                              </block>
+                            </value>
+                          </block>
+                        </value>
+                        <statement name="DO0">
+                          <block type="text_print" id="Nl@?dC?U,Ye3U_LA;Axi">
+                            <value name="TEXT">
+                              <block type="text" id="@)S8$MB!?4_~RD];}^i/">
+                                <field name="TEXT">balance:</field>
+                              </block>
+                            </value>
+                            <next>
+                              <block type="text_print" id="r%RW2yoH*H5OlniuaK8D">
+                                <value name="TEXT">
+                                  <block type="check_value" id="tl1{,)4bcP}:Ws,Fi+)b">
+                                    <value name="value">
+                                      <block type="variables_get" id="Df7e*T#U4)c@)x0JG|ny">
+                                        <field name="VAR" id=",*SS?L%(^7CUnw@lg=92" variabletype="">ret</field>
+                                      </block>
+                                    </value>
+                                  </block>
+                                </value>
+                              </block>
+                            </next>
+                          </block>
+                        </statement>
+                        <next>
+                          <block type="variables_set" id="fF^YQXZ%-Xr`:Hwohg,{">
+                            <field name="VAR" id=",*SS?L%(^7CUnw@lg=92" variabletype="">ret</field>
+                            <value name="VALUE">
+                              <block type="_getbalance" id="8c1aXg$o0|.tCFR?lc)e">
+                                <mutation items="1"></mutation>
+                                <value name="ADD0">
+                                  <block type="text" id="Yfz[,Cuv)INHc2S3cCw2">
+                                    <field name="TEXT">testaccount</field>
+                                  </block>
+                                </value>
+                              </block>
+                            </value>
+                            <next>
+                              <block type="controls_if" id="Z14,7^]g%NNMIjz.2nN^">
+                                <value name="IF0">
+                                  <block type="check_result" id=";nKfBM;kl,(UL%BoR|WY">
+                                    <value name="result">
+                                      <block type="variables_get" id="}i1{ooCFw^|sS-Y{!N3R">
+                                        <field name="VAR" id=",*SS?L%(^7CUnw@lg=92" variabletype="">ret</field>
+                                      </block>
+                                    </value>
+                                  </block>
+                                </value>
+                                <statement name="DO0">
+                                  <block type="text_print" id=";CPe`v1::-iu.Yw_LkcY">
+                                    <value name="TEXT">
+                                      <block type="text" id="9Z=L9UHlyWV3wT7c!zNo">
+                                        <field name="TEXT">testaccount balance:</field>
+                                      </block>
+                                    </value>
+                                    <next>
+                                      <block type="text_print" id="!YNn0q*rtYlYW}DNn(mR">
+                                        <value name="TEXT">
+                                          <block type="check_value" id="|T22F3`dL,KMUsr8+uxe">
+                                            <value name="value">
+                                              <block type="variables_get" id="eN?{F8Wzl;mY~8+LFx_A">
+                                                <field name="VAR" id=",*SS?L%(^7CUnw@lg=92" variabletype="">ret</field>
+                                              </block>
+                                            </value>
+                                          </block>
+                                        </value>
+                                      </block>
+                                    </next>
+                                  </block>
+                                </statement>
+                                <next>
+                                  <block type="text_print" id="fM!DkQdu_PZKBK=wu-+O">
+                                    <value name="TEXT">
+                                      <block type="text" id="8QU?UReU$UJ,ojvK4;r]">
+                                        <field name="TEXT">-- koin okuruyo --</field>
+                                      </block>
+                                    </value>
+                                    <next>
+                                      <block type="variables_set" id="@ArA=zUQ-}kA/LOTjt]r">
+                                        <field name="VAR" id=",*SS?L%(^7CUnw@lg=92" variabletype="">ret</field>
+                                        <value name="VALUE">
+                                          <block type="_sendtoaddress" id="L~j4p,uy%QYkybpK}K7n">
+                                            <mutation items="2"></mutation>
+                                            <value name="ADD0">
+                                              <block type="text" id="d^b+gzkPwK5l~g}4S{;S">
+                                                <field name="TEXT">p8Dp8vHVuCWVY474j6CEiSAPaFh1bgznaw</field>
+                                              </block>
+                                            </value>
+                                            <value name="ADD1">
+                                              <block type="math_number" id="9LXp_ka$O~3)Mhf~)#cR">
+                                                <field name="NUM">1.1</field>
+                                              </block>
+                                            </value>
+                                          </block>
+                                        </value>
+                                        <next>
+                                          <block type="variables_set" id="tF1cM-+9horJ].H8]f_*">
+                                            <field name="VAR" id=",*SS?L%(^7CUnw@lg=92" variabletype="">ret</field>
+                                            <value name="VALUE">
+                                              <block type="_getbalance" id="VSb[{AF,dPxxNhIj:~)H">
+                                                <mutation items="0"></mutation>
+                                              </block>
+                                            </value>
+                                            <next>
+                                              <block type="controls_if" id="Gq#CGx%-dSv^~]nt~6OE">
+                                                <value name="IF0">
+                                                  <block type="check_result" id="|pjzmvzL!j#z`j1e/SA_">
+                                                    <value name="result">
+                                                      <block type="variables_get" id="X~zr{Uh@|N}NITg={4o+">
+                                                        <field name="VAR" id=",*SS?L%(^7CUnw@lg=92" variabletype="">ret</field>
+                                                      </block>
+                                                    </value>
+                                                  </block>
+                                                </value>
+                                                <statement name="DO0">
+                                                  <block type="text_print" id="xd[rt}E;qaCsjy99E!3b">
+                                                    <value name="TEXT">
+                                                      <block type="text" id="LU8[*c:pTOtBG)w6uf[(">
+                                                        <field name="TEXT">balance:</field>
+                                                      </block>
+                                                    </value>
+                                                    <next>
+                                                      <block type="text_print" id="j;i]bbPsPah;*;VtW/5|">
+                                                        <value name="TEXT">
+                                                          <block type="check_value" id="0r,XNun(v!SAz+`M$vue">
+                                                            <value name="value">
+                                                              <block type="variables_get" id="JWE9y5d-vI2P[a-Wm`=5">
+                                                                <field name="VAR" id=",*SS?L%(^7CUnw@lg=92" variabletype="">ret</field>
+                                                              </block>
+                                                            </value>
+                                                          </block>
+                                                        </value>
+                                                      </block>
+                                                    </next>
+                                                  </block>
+                                                </statement>
+                                              </block>
+                                            </next>
+                                          </block>
+                                        </next>
+                                      </block>
+                                    </next>
+                                  </block>
+                                </next>
+                              </block>
+                            </next>
+                          </block>
+                        </next>
+                      </block>
+                    </next>
+                  </block>
+                </next>
+              </block>
+            </statement>
+          </block>
+      </category>
+
+      <category name="ブロック更新通知">
+          <variables>
+            <variable type="" id="O$07Y)mS2~3Jg6;,?@DT">ret</variable>
+            <variable type="" id="w@Y0e:U%+SRVIhdG{@/2">initialsync</variable>
+            <variable type="" id="/!XV*Y[XNFh,5_RH#l{k">hash</variable>
+            <variable type="" id="!hJmgJG:{Kv5p6FsN,Br">block</variable>
+            <variable type="" id="hkpoNi)iQ$1?N$V.K-#N">tx</variable>
+            <variable type="" id="]]{QR;46k-e~ErpFoCeg">i</variable>
+          </variables>
+          <block type="_cbonblocknotify" id="Ivgq,:sTNB$)*{OIaKYi" x="88" y="138">
+            <statement name="cbcode">
+              <block type="text_print" id="r$x%Y+g5~_kqTKe7WP]V">
+                <value name="TEXT">
+                  <block type="text" id="uIU/e5P7fIAcFo;!O;^%">
+                    <field name="TEXT">*** OnBlockNotify ***</field>
+                  </block>
+                </value>
+                <next>
+                  <block type="controls_if" id="1%Rn(?lr+y?|Z%9vdz[l">
+                    <value name="IF0">
+                      <block type="logic_compare" id="HgRNu;*:~a?RfoXMTi7n">
+                        <field name="OP">NEQ</field>
+                        <value name="A">
+                          <block type="variables_get" id=",2$cz*kW`NW:9Z8#@n%j">
+                            <field name="VAR" id="w@Y0e:U%+SRVIhdG{@/2" variabletype="">initialsync</field>
+                          </block>
+                        </value>
+                        <value name="B">
+                          <block type="logic_boolean" id="j1U)N=LrYpCFw4{=nWiE">
+                            <field name="BOOL">TRUE</field>
+                          </block>
+                        </value>
+                      </block>
+                    </value>
+                    <statement name="DO0">
+                      <block type="variables_set" id="xQ:BO:j8APzi`G#.?Zch">
+                        <field name="VAR" id="O$07Y)mS2~3Jg6;,?@DT" variabletype="">ret</field>
+                        <value name="VALUE">
+                          <block type="_getblock" id="7;:Ks#E,C}Ga4+Yy;q;T">
+                            <mutation items="1"></mutation>
+                            <value name="ADD0">
+                              <block type="variables_get" id="7+HG$gUUC?*c[8*/2Z:g">
+                                <field name="VAR" id="/!XV*Y[XNFh,5_RH#l{k" variabletype="">hash</field>
+                              </block>
+                            </value>
+                          </block>
+                        </value>
+                        <next>
+                          <block type="controls_if" id="*U6.DR`WZAd|lr@+l+o!">
+                            <value name="IF0">
+                              <block type="check_result" id="oXXR:0=LqkS^C{V~pt`Y">
+                                <value name="result">
+                                  <block type="variables_get" id="/qrl/AZJe%mJU$G3gXp_">
+                                    <field name="VAR" id="O$07Y)mS2~3Jg6;,?@DT" variabletype="">ret</field>
+                                  </block>
+                                </value>
+                              </block>
+                            </value>
+                            <statement name="DO0">
+                              <block type="text_print" id="3V7+)U:Fafl$Pmh`TW$T">
+                                <value name="TEXT">
+                                  <block type="text" id="-2LO;ZrCul+NSAUV!9M6">
+                                    <field name="TEXT">--- Block Info ---</field>
+                                  </block>
+                                </value>
+                                <next>
+                                  <block type="variables_set" id="WePB4Y!98E6fDo{=)B?A">
+                                    <field name="VAR" id="!hJmgJG:{Kv5p6FsN,Br" variabletype="">block</field>
+                                    <value name="VALUE">
+                                      <block type="check_value" id="D%cDL{Q++%y$Wv|)7~Oi">
+                                        <value name="value">
+                                          <block type="variables_get" id="DUwufNe8i8iutRmg,WC{">
+                                            <field name="VAR" id="O$07Y)mS2~3Jg6;,?@DT" variabletype="">ret</field>
+                                          </block>
+                                        </value>
+                                      </block>
+                                    </value>
+                                    <next>
+                                      <block type="text_print" id="kl_h/McUgNMWl{K.+HFM">
+                                        <value name="TEXT">
+                                          <block type="text" id="4XD9^kL{Iti}9dUY?sJ2">
+                                            <field name="TEXT">confirmations:</field>
+                                          </block>
+                                        </value>
+                                        <next>
+                                          <block type="text_print" id="v=Pl{,_^34e%n+f9v+$w">
+                                            <value name="TEXT">
+                                              <block type="lists_getindex2" id="~%3MWfKKov-d-#k8GG}4">
+                                                <value name="list">
+                                                  <block type="variables_get" id="yrmg[Ar#aphoAAr%$CBY">
+                                                    <field name="VAR" id="!hJmgJG:{Kv5p6FsN,Br" variabletype="">block</field>
+                                                  </block>
+                                                </value>
+                                                <value name="index">
+                                                  <block type="text" id="1D|qL/W{h.(TS+7,*mra">
+                                                    <field name="TEXT">confirmations</field>
+                                                  </block>
+                                                </value>
+                                              </block>
+                                            </value>
+                                            <next>
+                                              <block type="text_print" id="{(8%W=k(fPvzyDYd%cKp">
+                                                <value name="TEXT">
+                                                  <block type="text" id="~Al4etUVbuzNevM}deSU">
+                                                    <field name="TEXT">tx:</field>
+                                                  </block>
+                                                </value>
+                                                <next>
+                                                  <block type="variables_set" id="1nR@$d)|+JB1S5!a*m$(">
+                                                    <field name="VAR" id="hkpoNi)iQ$1?N$V.K-#N" variabletype="">tx</field>
+                                                    <value name="VALUE">
+                                                      <block type="lists_getindex2" id="{we4:rxr1!O-`rUMwHW!">
+                                                        <value name="list">
+                                                          <block type="variables_get" id=",:[b3A:pG!k!mb)mr-q}">
+                                                            <field name="VAR" id="!hJmgJG:{Kv5p6FsN,Br" variabletype="">block</field>
+                                                          </block>
+                                                        </value>
+                                                        <value name="index">
+                                                          <block type="text" id="k%x#TC[(Z-bYHDTn@f,@">
+                                                            <field name="TEXT">tx</field>
+                                                          </block>
+                                                        </value>
+                                                      </block>
+                                                    </value>
+                                                    <next>
+                                                      <block type="controls_for" id="F1au/%XSl#L96l$~?#Xa">
+                                                        <field name="VAR" id="]]{QR;46k-e~ErpFoCeg" variabletype="">i</field>
+                                                        <value name="FROM">
+                                                          <block type="math_number" id=":e*5m-{6Qe@#|WjN(C7T">
+                                                            <field name="NUM">0</field>
+                                                          </block>
+                                                        </value>
+                                                        <value name="TO">
+                                                          <block type="lists_length" id="8,x{M7lW:~wvA{VVdGcl">
+                                                            <value name="VALUE">
+                                                              <block type="variables_get" id="y(k:%{1~XuXD[wM5nG|#">
+                                                                <field name="VAR" id="hkpoNi)iQ$1?N$V.K-#N" variabletype="">tx</field>
+                                                              </block>
+                                                            </value>
+                                                          </block>
+                                                        </value>
+                                                        <value name="BY">
+                                                          <block type="math_number" id="PwaMM1OwL^AsS}Ngv}U@">
+                                                            <field name="NUM">1</field>
+                                                          </block>
+                                                        </value>
+                                                        <statement name="DO">
+                                                          <block type="text_print" id=";]36sOS+Tn+O886Zpvm=">
+                                                            <value name="TEXT">
+                                                              <block type="lists_getindex2" id="bCDp2im#j3WjQWMnF-:p">
+                                                                <value name="list">
+                                                                  <block type="variables_get" id="}Hc@MnH_AIQP%zkJBcEB">
+                                                                    <field name="VAR" id="hkpoNi)iQ$1?N$V.K-#N" variabletype="">tx</field>
+                                                                  </block>
+                                                                </value>
+                                                                <value name="index">
+                                                                  <block type="variables_get" id="Z8E%DniW0V:J9|LtFW?P">
+                                                                    <field name="VAR" id="]]{QR;46k-e~ErpFoCeg" variabletype="">i</field>
+                                                                  </block>
+                                                                </value>
+                                                              </block>
+                                                            </value>
+                                                          </block>
+                                                        </statement>
+                                                      </block>
+                                                    </next>
+                                                  </block>
+                                                </next>
+                                              </block>
+                                            </next>
+                                          </block>
+                                        </next>
+                                      </block>
+                                    </next>
+                                  </block>
+                                </next>
+                              </block>
+                            </statement>
+                          </block>
+                        </next>
+                      </block>
+                    </statement>
+                  </block>
+                </next>
+              </block>
+            </statement>
+          </block>
+      </category>
+
+      <category name="ウォレット更新通知">
+          <variables>
+            <variable type="" id="*;V.UWN:kK9_uHIrq^-m">ret</variable>
+            <variable type="" id="G@:|GNik~oGj}r[yaNbn">txid</variable>
+            <variable type="" id="p:7aTG(PI,:d^@Ny-XyM">transaction</variable>
+            <variable type="" id="6c3-^PB{h]hfgEC#Du6b">detail</variable>
+            <variable type="" id="R:^h4:/vP0wG^F._Seb)">i</variable>
+            <variable type="" id="*w@A]#z[P/Y_fA6xpSUZ">dinfo</variable>
+          </variables>
+          <block type="_cbonwalletnotify" id="e):MJv;WssoxrVgAT=MJ" x="188" y="-162">
+            <statement name="cbcode">
+              <block type="text_print" id="L+Om;Q~xs#D}*||aK+uO">
+                <value name="TEXT">
+                  <block type="text" id="g[tM=-o_DT1eN/vjPb{w">
+                    <field name="TEXT">*** OnWalletNotify **</field>
+                  </block>
+                </value>
+                <next>
+                  <block type="variables_set" id="M3TH()O|=kh[aMj@mG],">
+                    <field name="VAR" id="*;V.UWN:kK9_uHIrq^-m" variabletype="">ret</field>
+                    <value name="VALUE">
+                      <block type="_gettransaction" id="2It`HinX%vE.1T|?Mo)5">
+                        <mutation items="1"></mutation>
+                        <value name="ADD0">
+                          <block type="variables_get" id="W,0Z8KW3PBZ?mU4v`MG*">
+                            <field name="VAR" id="G@:|GNik~oGj}r[yaNbn" variabletype="">txid</field>
+                          </block>
+                        </value>
+                      </block>
+                    </value>
+                    <next>
+                      <block type="controls_if" id="@O}0d|8gbAmVV_v=|o:=">
+                        <value name="IF0">
+                          <block type="check_result" id="f%h1D3_!y(3PBdmV0/wK">
+                            <value name="result">
+                              <block type="variables_get" id=".rb)3b-5#tpV|r,;.zAw">
+                                <field name="VAR" id="*;V.UWN:kK9_uHIrq^-m" variabletype="">ret</field>
+                              </block>
+                            </value>
+                          </block>
+                        </value>
+                        <statement name="DO0">
+                          <block type="text_print" id="v.2QIYHSOaIfkhp4fn^U">
+                            <value name="TEXT">
+                              <block type="text" id="$Y}y9T!UXg}i9#Raz!RE">
+                                <field name="TEXT">--- Transaction Info ---</field>
+                              </block>
+                            </value>
+                            <next>
+                              <block type="variables_set" id=".lksZ$jf@Qh$w7X(@xh_">
+                                <field name="VAR" id="p:7aTG(PI,:d^@Ny-XyM" variabletype="">transaction</field>
+                                <value name="VALUE">
+                                  <block type="check_value" id="wE_.wx*[!^GM,6~BB2tA">
+                                    <value name="value">
+                                      <block type="variables_get" id="h_t=;$BhubrJ!P2jFk?5">
+                                        <field name="VAR" id="*;V.UWN:kK9_uHIrq^-m" variabletype="">ret</field>
+                                      </block>
+                                    </value>
+                                  </block>
+                                </value>
+                                <next>
+                                  <block type="text_print" id="mE]RDHZ$m;p{.Fw,^Pn9">
+                                    <value name="TEXT">
+                                      <block type="text" id="MI9[V[EH*h_`%H:}+eD5">
+                                        <field name="TEXT">Txid:</field>
+                                      </block>
+                                    </value>
+                                    <next>
+                                      <block type="text_print" id="Gk#KLBnK.Iw2znB/ju;K">
+                                        <value name="TEXT">
+                                          <block type="lists_getindex2" id="XMt8O)KV+8RL*,rb}OP=">
+                                            <value name="list">
+                                              <block type="variables_get" id="]3C(WADKEhwsBX_TijsA">
+                                                <field name="VAR" id="p:7aTG(PI,:d^@Ny-XyM" variabletype="">transaction</field>
+                                              </block>
+                                            </value>
+                                            <value name="index">
+                                              <block type="text" id="5~fJ92RpL;$1p_hUxp:4">
+                                                <field name="TEXT">txid</field>
+                                              </block>
+                                            </value>
+                                          </block>
+                                        </value>
+                                        <next>
+                                          <block type="text_print" id="+k50F.IB8O^)`O?P4*r,">
+                                            <value name="TEXT">
+                                              <block type="text" id="NkJreJk`R:=p10T=MfX9">
+                                                <field name="TEXT">details:</field>
+                                              </block>
+                                            </value>
+                                            <next>
+                                              <block type="variables_set" id="fM@PU~|~7IS3}!o5!I!L">
+                                                <field name="VAR" id="6c3-^PB{h]hfgEC#Du6b" variabletype="">detail</field>
+                                                <value name="VALUE">
+                                                  <block type="lists_getindex2" id="s:iQk]4V6MUMCX}TX-RN">
+                                                    <value name="list">
+                                                      <block type="variables_get" id="1?gx/cN4^=vrLwLXV.:R">
+                                                        <field name="VAR" id="p:7aTG(PI,:d^@Ny-XyM" variabletype="">transaction</field>
+                                                      </block>
+                                                    </value>
+                                                    <value name="index">
+                                                      <block type="text" id="oF3hVYJs@6GK`{.8|ouM">
+                                                        <field name="TEXT">details</field>
+                                                      </block>
+                                                    </value>
+                                                  </block>
+                                                </value>
+                                                <next>
+                                                  <block type="controls_for" id="{{y8D`%+=AdwCls8fSPE">
+                                                    <field name="VAR" id="R:^h4:/vP0wG^F._Seb)" variabletype="">i</field>
+                                                    <value name="FROM">
+                                                      <block type="math_number" id="J+5[YA$x4,]y!nC~})fF">
+                                                        <field name="NUM">0</field>
+                                                      </block>
+                                                    </value>
+                                                    <value name="TO">
+                                                      <block type="lists_length" id="pw0Q{8/0A!YIx(kJbt[V">
+                                                        <value name="VALUE">
+                                                          <block type="variables_get" id="Rt74Ox:;ZzVTKM1qx?oa">
+                                                            <field name="VAR" id="6c3-^PB{h]hfgEC#Du6b" variabletype="">detail</field>
+                                                          </block>
+                                                        </value>
+                                                      </block>
+                                                    </value>
+                                                    <value name="BY">
+                                                      <block type="math_number" id="`kNgpd04w0Sofsv7bg+P">
+                                                        <field name="NUM">1</field>
+                                                      </block>
+                                                    </value>
+                                                    <statement name="DO">
+                                                      <block type="variables_set" id="LDBR@r9(Dc9;#.}vhAAM">
+                                                        <field name="VAR" id="*w@A]#z[P/Y_fA6xpSUZ" variabletype="">dinfo</field>
+                                                        <value name="VALUE">
+                                                          <block type="lists_getindex2" id="t/}!vbadE[@0ZC5,-MM1">
+                                                            <value name="list">
+                                                              <block type="variables_get" id="DCeB@3RX(!#RYoN@4Yzq">
+                                                                <field name="VAR" id="6c3-^PB{h]hfgEC#Du6b" variabletype="">detail</field>
+                                                              </block>
+                                                            </value>
+                                                            <value name="index">
+                                                              <block type="variables_get" id="$[`5MrRyh=5!G2]d#ms{">
+                                                                <field name="VAR" id="R:^h4:/vP0wG^F._Seb)" variabletype="">i</field>
+                                                              </block>
+                                                            </value>
+                                                          </block>
+                                                        </value>
+                                                        <next>
+                                                          <block type="text_print" id="TkZ%QQ*ulE(PxF:5-na^">
+                                                            <value name="TEXT">
+                                                              <block type="text" id="`~[Q48sqr_X,pn7*%u/%">
+                                                                <field name="TEXT">address:</field>
+                                                              </block>
+                                                            </value>
+                                                            <next>
+                                                              <block type="text_print" id="v-gqpfp,j=ki=J}%HL;d">
+                                                                <value name="TEXT">
+                                                                  <block type="lists_getindex2" id="Ks[9YK%/dYld*jaVPlJm">
+                                                                    <value name="list">
+                                                                      <block type="variables_get" id="NIF5g-7b,di*oXB$.0qf">
+                                                                        <field name="VAR" id="*w@A]#z[P/Y_fA6xpSUZ" variabletype="">dinfo</field>
+                                                                      </block>
+                                                                    </value>
+                                                                    <value name="index">
+                                                                      <block type="text" id="S:fuB#pE^MO8Bp4v{/~;">
+                                                                        <field name="TEXT">address</field>
+                                                                      </block>
+                                                                    </value>
+                                                                  </block>
+                                                                </value>
+                                                                <next>
+                                                                  <block type="text_print" id="Bz-BHXV.EYHYH:0v;mbF">
+                                                                    <value name="TEXT">
+                                                                      <block type="text" id="=XYp}`o9s~78rt-+GqwK">
+                                                                        <field name="TEXT">amount:</field>
+                                                                      </block>
+                                                                    </value>
+                                                                    <next>
+                                                                      <block type="text_print" id="];wkXI0:Bnvjb54,ueSg">
+                                                                        <value name="TEXT">
+                                                                          <block type="lists_getindex2" id="iw%mX?k.BhSn9X~h`tz=">
+                                                                            <value name="list">
+                                                                              <block type="variables_get" id="EAIib{0}Fj50#s1ShEGY">
+                                                                                <field name="VAR" id="*w@A]#z[P/Y_fA6xpSUZ" variabletype="">dinfo</field>
+                                                                              </block>
+                                                                            </value>
+                                                                            <value name="index">
+                                                                              <block type="text" id="(+,96s@!9;GhRD/Q?vto">
+                                                                                <field name="TEXT">amount</field>
+                                                                              </block>
+                                                                            </value>
+                                                                          </block>
+                                                                        </value>
+                                                                      </block>
+                                                                    </next>
+                                                                  </block>
+                                                                </next>
+                                                              </block>
+                                                            </next>
+                                                          </block>
+                                                        </next>
+                                                      </block>
+                                                    </statement>
+                                                  </block>
+                                                </next>
+                                              </block>
+                                            </next>
+                                          </block>
+                                        </next>
+                                      </block>
+                                    </next>
+                                  </block>
+                                </next>
+                              </block>
+                            </next>
+                          </block>
+                        </statement>
+                      </block>
+                    </next>
+                  </block>
+                </next>
+              </block>
+            </statement>
+          </block>
+
+      </category>
+
+    </category>
+ </xml>
+
+  <script>
+    // Inject primary workspace.
+    var primaryWorkspace = Blockly.inject('primaryDiv',
+      {grid:
+          {spacing: 25,
+           length: 3,
+           colour: '#ccc',
+           snap: true},
+       media: './media/',
+       toolbox: document.getElementById('toolbox'),
+       zoom:
+           {controls: true,
+            wheel: true}
+      });
+
+    // Listen to events on primary workspace.
+    primaryWorkspace.addChangeListener(changeEvent);
+
+    function changeEvent(primaryEvent) {
+      if (primaryEvent.type == Blockly.Events.UI) {
+        return;
+      }
+      // Generate LuaScript code.
+      var code = Blockly.Lua.workspaceToCode(primaryWorkspace);
+      document.getElementById('textLuacode').innerHTML = code;
+    }
+
+    function fileDownload() {
+        var xml = Blockly.Xml.workspaceToDom(primaryWorkspace);
+        var domToPretty = Blockly.Xml.domToPrettyText(xml);
+        var blob = new Blob([ domToPretty ], { "type" : "text/xml" });
+        let link = document.createElement('a')
+        link.href = window.URL.createObjectURL(blob)
+        link.download = 'plugin.xml'
+        link.click()   
+    }
+
+    function handleFileSelect(evt) {
+        var files = evt.target.files;
+        if(files.length > 0) {
+            var reader = new FileReader();
+            reader.onload = function(ev) {
+                  var outhtml = ev.target.result;
+                  primaryWorkspace.clear();
+                  xmlDom = Blockly.Xml.textToDom(ev.target.result);
+                  Blockly.Xml.domToWorkspace(primaryWorkspace, xmlDom);
+            }
+            reader.readAsText(files[0]);
+        }
+    }
+    document.getElementById('files').addEventListener('change', handleFileSelect, false);
+  </script>
+
+</body>
+</html>
