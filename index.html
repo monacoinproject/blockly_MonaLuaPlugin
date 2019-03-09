@@ -8,6 +8,7 @@
   <script src="./lua_compressed.js"></script>
   <script src="./custom_block.js"></script>
   <script src="./msg/js/ja.js"></script>
+  <script src="https://code.jquery.com/jquery-1.11.1.min.js"></script>
   <style>
     body {
       background-color: #fff;
@@ -34,24 +35,72 @@
       position: relative;
       top: -0.15em;
       background-color: #999999; }
-    .label.color-blue { background-color: #6f9ad1; }
-    .label.color-red { background-color: #d37c7c; }
+      .label.color-blue { background-color: #6f9ad1; }
+      .label.color-red { background-color: #d37c7c; }
+      .label.color-green { background-color: #9bc268; }
+      .label.color-orange { background-color: #dea154; }
+      .label.color-yellow { background-color: #e9d641; }
+      .label.color-purple { background-color: #9f83d1; } 
   </style>
 </head>
 <body>
-  <label class="label base color-red" onclick="fileDownload()">保存</label>
-  <label class="label base color-blue">読み込み<input type="file" id="files" name="files[]" style="display:none;" multiple /></label>
-  <table>
+  <table  border="0" width="100%">
+    <thead>
+      <tr align="left">
+        <th>
+          <table width="100%">
+            <tr>
+              <td>
+                <label class="label base color-red" onclick="fileDownload()">保存</label>
+                <label class="label base color-blue">読み込み<input type="file" id="files" name="files[]" style="display:none;" multiple /></label>
+              </td>
+              <td align="right">
+                <font size="2">
+                  coindaddr:<input type="text" id="coindaddr" size="7" value="localhost">
+                  rpcport:<input type="number" id="port" style="width:55px;" value="19443">
+                  username:<input type="password" id="user" size="7" value="user">
+                  password:<input type="password" id="passwd" size="7" value="passwd">
+                </font>
+              </td>
+            </tr>
+          </table>
+        </th>
+        <th align="right">
+          <input type="number" id="blocknum" min="1"  style="width:50px;" value="1">
+          <label class="label base color-green" id="generate">ブロックを進める</label>
+          <label class="label base color-blue" id="loadplugin">プログラム転送</label>
+          <label class="label base color-red" id="unloadplugin">プログラム停止</label>
+        </th>
+      </tr>
+    </thead>
     <tr>
-      <td>
+      <td width="800">
         <div id="primaryDiv" style="height: 600px; width: 800px;"></div>
       </td>
       <td>
-        <div style="height: 600px;"><pre id="textLuacode"></pre></div>
+        <table border="1" width="100%"height="600" style="table-layout:fixed;">
+          <tr>
+            <td height="60%">
+              <div style="height:100%; overflow:auto;"><pre id="textLuacode"></pre></div>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <div class="logbox" style="height:80%; overflow:auto;" id="auto_scroll">
+                <pre id="RpcResult"></pre>  
+              </div>
+              <div align="right">
+                <p>
+                  <label class="label base color-blue" id="clearlog">クリア</label>
+                </p>
+              </div>
+          </td>
+          </tr>
+        </table>
       </td>
     </tr>
   </table>
-
+  <div align="right"><font color="#d0d0d0">© 2019 Monacoinproject</font></div>
   <xml id="toolbox" style="display: none">
     <category name="条件式" colour="%{BKY_LOGIC_HUE}">
       <block type="controls_if"></block>
@@ -838,6 +887,90 @@
         }
     }
     document.getElementById('files').addEventListener('change', handleFileSelect, false);
+    
+    $(function() {
+        $('#clearlog').click(function() {
+          $('#RpcResult').html("");
+        });
+
+        function coindRpc(method, params, callback)
+        {
+          var urlport = 'http://' + $("#coindaddr").val() + ':' + $("#port").val();
+          var user = $("#user").val();
+          var passwd = $("#passwd").val();
+          var reqid = new Date().getTime() & 0xffff;
+
+          $('#RpcResult').append(`[${reqid}] '${method}' request\n`);
+
+          $.ajax({
+            url: urlport,
+            type: 'post',
+            data: `{"method":"${method}","params":${params},"id":${reqid}}`,
+            dataType: 'json',
+            headers: {
+              'authorization': 'Basic ' + btoa(user + ':' + passwd),
+            },
+            success: function(data) {
+              callback(reqid, method, data.result);
+            },
+            error: function(XMLHttpRequest, textStatus, errorThrown){
+            }
+          });
+        }
+
+        $('#generate').click(function() {
+          var callback = function(id, method, result){
+            if(result['chain'] == "regtest")
+            {
+              var gen_callback = function(id, method, result){
+                var log = `[${id}] '${method}' response:\n`
+                result.forEach(function(value){
+                  log += 'blockhash: ' + value + '\n';
+                })
+                log += '\n';
+                $('#RpcResult').append(log);
+                $(".logbox").scrollTop($("#auto_scroll")[0].scrollHeight);  
+              }
+ 
+              var blocknum = $("#blocknum").val();
+              coindRpc('generate', `[${blocknum}]`, gen_callback)
+            }
+            else{
+              var log = "'generate block' does not work with " + result['chain'] + "net.\n\n"
+              $('#RpcResult').append(log);
+              $(".logbox").scrollTop($("#auto_scroll")[0].scrollHeight);  
+            }
+          }
+          coindRpc('getblockchaininfo', `[]`, callback)
+        });
+
+        $('#loadplugin').click(function() {
+          var callback = function(id, method, result){
+            var loadcallback = function(id, method, result){
+              var log = `[${id}] '${method}' response:\n${result}`
+              log += '\n\n';
+              $('#RpcResult').append(log);
+              $(".logbox").scrollTop($("#auto_scroll")[0].scrollHeight);  
+            }
+            var code = encodeURI(Blockly.Lua.workspaceToCode(primaryWorkspace));
+            coindRpc('loadplugincode', `["${code}"]`, loadcallback)
+          }
+          var code = encodeURI(Blockly.Lua.workspaceToCode(primaryWorkspace));
+          if(code != ""){
+            coindRpc('unloadplugincode', `[]`, callback)
+          }
+        });
+
+        $('#unloadplugin').click(function() {
+          var callback = function(id, method, result){
+            var log = `[${id}] '${method}' response:\n${result}`
+            log += '\n\n';
+            $('#RpcResult').append(log);
+            $(".logbox").scrollTop($("#auto_scroll")[0].scrollHeight);  
+          }
+          coindRpc('unloadplugincode', `[]`, callback)
+        });
+      })
   </script>
 
 </body>
